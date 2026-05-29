@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MediaPipe Motion Capture</title>
+  </head>
+  <body>
+    <main id="app">
+      <section class="stage-shell">
+        <div class="topbar">
+          <div>
+            <h1>MediaPipe Motion Capture</h1>
+            <p id="status">初期化待機中</p>
+          </div>
+          <div class="actions">
+            <button id="startButton" type="button">カメラ開始</button>
+            <button id="calibrateButton" type="button" disabled>キャリブレーション</button>
+            <button id="resetCalibrationButton" type="button" disabled>補正解除</button>
+            <button id="recordButton" type="button" disabled>記録開始</button>
+            <button id="copyButton" type="button" disabled>JSONコピー</button>
+            <button id="downloadButton" type="button" disabled>保存</button>
+          </div>
+        </div>
+
+        <div class="stage">
+          <video id="camera" playsinline muted></video>
+          <canvas id="wireCanvas" width="1280" height="720"></canvas>
+        </div>
+
+        <section class="avatar-panel">
+          <div class="output-header">
+            <h2>VRM Preview</h2>
+            <span id="vrmState">no model</span>
+          </div>
+          <div class="avatar-stage" id="vrmContainer"></div>
+          <div class="avatar-controls">
+            <label>
+              <span>VRMモデル</span>
+              <input id="vrmFile" type="file" accept=".vrm,model/gltf-binary" />
+            </label>
+            <label>
+              <span>モーション強度</span>
+              <input id="avatarStrength" type="range" min="0" max="1.5" step="0.01" value="0.85" />
+            </label>
+          </div>
+        </section>
+
+        <aside class="control-panel">
+          <label>
+            <span>カメラ</span>
+            <select id="cameraSelect">
+              <option value="">自動選択</option>
+            </select>
+          </label>
+          <label class="checkbox-control">
+            <span>左右反転</span>
+            <input id="mirrorInput" type="checkbox" checked />
+          </label>
+          <label class="checkbox-control">
+            <span>Body出力</span>
+            <input id="bodyOutput" type="checkbox" checked />
+          </label>
+          <label class="checkbox-control">
+            <span>Face出力</span>
+            <input id="faceOutput" type="checkbox" checked />
+          </label>
+          <label class="checkbox-control">
+            <span>Hands出力</span>
+            <input id="handsOutput" type="checkbox" checked />
+          </label>
+          <label>
+            <span>スムージング</span>
+            <input id="smoothing" type="range" min="0" max="0.92" step="0.01" value="0.72" />
+          </label>
+          <label>
+            <span>信頼度</span>
+            <input id="confidence" type="range" min="0.25" max="0.85" step="0.01" value="0.55" />
+          </label>
+          <label>
+            <span>Pose品質</span>
+            <select id="poseModel">
+              <option value="lite">Lite</option>
+              <option value="full" selected>Full</option>
+              <option value="heavy">Heavy</option>
+            </select>
+          </label>
+          <label>
+            <span>上半身倍率</span>
+            <input id="scale" type="range" min="0.75" max="1.65" step="0.01" value="1" />
+          </label>
+          <label>
+            <span>送信FPS</span>
+            <input id="wsFps" type="range" min="5" max="60" step="1" value="30" />
+          </label>
+          <label class="wide-control">
+            <span>WebSocket送信先</span>
+            <input id="wsUrl" type="url" placeholder="ws://127.0.0.1:8787/motion" />
+          </label>
+          <button id="wsButton" class="control-button" type="button">接続</button>
+        </aside>
+
+        <section class="readout">
+          <div>
+            <span>FPS</span>
+            <strong id="fps">0</strong>
+          </div>
+          <div>
+            <span>Pose</span>
+            <strong id="poseState">-</strong>
+          </div>
+          <div>
+            <span>Face</span>
+            <strong id="faceState">-</strong>
+          </div>
+          <div>
+            <span>Hands</span>
+            <strong id="handState">-</strong>
+          </div>
+          <div>
+            <span>Frames</span>
+            <strong id="frameState">0</strong>
+          </div>
+          <div>
+            <span>WS</span>
+            <strong id="wsState">OFF</strong>
+          </div>
+          <div>
+            <span>Bridge</span>
+            <strong id="bridgeState">-</strong>
+          </div>
+        </section>
+
+        <section class="output-panel">
+          <div class="output-header">
+            <h2>Motion JSON</h2>
+            <span id="recordState">idle</span>
+          </div>
+          <pre id="motionOutput">{}</pre>
+        </section>
+      </section>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

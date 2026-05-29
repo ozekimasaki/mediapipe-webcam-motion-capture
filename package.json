@@ -1,0 +1,25 @@
+{
+  "name": "mediapipe-webcam-motion-capture",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc && vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "bridge": "node bridge/vmc-bridge.mjs",
+    "deploy": "npm run build && wrangler deploy"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^0.10.21",
+    "@pixiv/three-vrm": "^3.5.3",
+    "three": "^0.184.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "ws": "^8.21.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.184.1",
+    "wrangler": "^4.95.0"
+  }
+}
