@@ -8,6 +8,8 @@
     "build": "tsc && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "bridge": "node bridge/vmc-bridge.mjs",
+    "verify": "npm run build && npm run verify:bridge",
+    "verify:bridge": "node bridge/verify-vmc-bridge.mjs",
     "deploy": "npm run build && wrangler deploy"
   },
   "dependencies": {

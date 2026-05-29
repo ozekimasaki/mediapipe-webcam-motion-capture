@@ -162,6 +162,16 @@ Bone names follow Unity `HumanBodyBones` names, such as `Hips`, `Spine`, `Head`,
 Finger bones are synthesized from MediaPipe hand curl values, so they are approximate but compatible with VMC receivers that listen to finger `HumanBodyBones`.
 BlendShape aliases are mapped to VRM-style names such as `A`, `I`, `U`, `E`, `O`, `Blink_L`, `Blink_R`, and `Joy`.
 
+## Verification
+
+Run the build and local bridge verification:
+
+```bash
+npm run verify
+```
+
+This starts a temporary local bridge, serves the built app from the bridge HTTP server, sends a sample motion packet over WebSocket, and verifies that VMC-style OSC packets are emitted for root, body bones, synthesized finger bones, blendshapes, and status.
+
 ## Deploy
 
 ```bash
