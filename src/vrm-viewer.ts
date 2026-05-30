@@ -24,6 +24,19 @@ type VrmViewer = {
   resize: () => void;
 };
 
+type IkBoneConfig = {
+  sourceName: string;
+  boneName: VRMHumanBoneName;
+  childBoneName: VRMHumanBoneName;
+  maxAngle: number;
+  weight: number;
+};
+
+type VrmRigCache = {
+  restDirections: Partial<Record<VRMHumanBoneName, THREE.Vector3>>;
+  parentBones: Partial<Record<VRMHumanBoneName, VRMHumanBoneName>>;
+};
+
 const bodyBoneMap: Record<string, VRMHumanBoneName> = {
   hips: VRMHumanBoneName.Hips,
   spine: VRMHumanBoneName.Spine,
@@ -40,6 +53,14 @@ const bodyBoneMap: Record<string, VRMHumanBoneName> = {
   leftLowerLeg: VRMHumanBoneName.LeftLowerLeg,
   rightUpperLeg: VRMHumanBoneName.RightUpperLeg,
   rightLowerLeg: VRMHumanBoneName.RightLowerLeg,
+};
+
+const torsoBoneMap: Record<string, VRMHumanBoneName> = {
+  hips: VRMHumanBoneName.Hips,
+  spine: VRMHumanBoneName.Spine,
+  chest: VRMHumanBoneName.Chest,
+  neck: VRMHumanBoneName.Neck,
+  head: VRMHumanBoneName.Head,
 };
 
 const expressionMap: Record<string, VRMExpressionPresetName> = {
@@ -108,6 +129,65 @@ const fingerBoneMap = {
   },
 } satisfies Record<"Left" | "Right", Record<keyof FingerCurl, VRMHumanBoneName[]>>;
 
+const ikBoneConfigs: IkBoneConfig[] = [
+  {
+    sourceName: "leftUpperArm",
+    boneName: VRMHumanBoneName.LeftUpperArm,
+    childBoneName: VRMHumanBoneName.LeftLowerArm,
+    maxAngle: 2.4,
+    weight: 1,
+  },
+  {
+    sourceName: "leftLowerArm",
+    boneName: VRMHumanBoneName.LeftLowerArm,
+    childBoneName: VRMHumanBoneName.LeftHand,
+    maxAngle: 2.6,
+    weight: 1,
+  },
+  {
+    sourceName: "rightUpperArm",
+    boneName: VRMHumanBoneName.RightUpperArm,
+    childBoneName: VRMHumanBoneName.RightLowerArm,
+    maxAngle: 2.4,
+    weight: 1,
+  },
+  {
+    sourceName: "rightLowerArm",
+    boneName: VRMHumanBoneName.RightLowerArm,
+    childBoneName: VRMHumanBoneName.RightHand,
+    maxAngle: 2.6,
+    weight: 1,
+  },
+  {
+    sourceName: "leftUpperLeg",
+    boneName: VRMHumanBoneName.LeftUpperLeg,
+    childBoneName: VRMHumanBoneName.LeftLowerLeg,
+    maxAngle: 1.6,
+    weight: 0.82,
+  },
+  {
+    sourceName: "leftLowerLeg",
+    boneName: VRMHumanBoneName.LeftLowerLeg,
+    childBoneName: VRMHumanBoneName.LeftFoot,
+    maxAngle: 1.9,
+    weight: 0.9,
+  },
+  {
+    sourceName: "rightUpperLeg",
+    boneName: VRMHumanBoneName.RightUpperLeg,
+    childBoneName: VRMHumanBoneName.RightLowerLeg,
+    maxAngle: 1.6,
+    weight: 0.82,
+  },
+  {
+    sourceName: "rightLowerLeg",
+    boneName: VRMHumanBoneName.RightLowerLeg,
+    childBoneName: VRMHumanBoneName.RightFoot,
+    maxAngle: 1.9,
+    weight: 0.9,
+  },
+];
+
 export function createVrmViewer(options: ViewerOptions): VrmViewer {
   const { container, strengthInput, stateElement, setStatus } = options;
   const scene = new THREE.Scene();
@@ -130,6 +210,7 @@ export function createVrmViewer(options: ViewerOptions): VrmViewer {
   loader.register((parser) => new VRMLoaderPlugin(parser));
 
   let currentVrm: VRM | null = null;
+  let currentRigCache: VrmRigCache | null = null;
   let latestMotion: MotionSnapshot | null = null;
 
   scene.add(new THREE.AmbientLight(0xffffff, 1.8));
@@ -147,7 +228,7 @@ export function createVrmViewer(options: ViewerOptions): VrmViewer {
 
     if (currentVrm) {
       if (latestMotion) {
-        applyMotionToVrm(currentVrm, latestMotion, Number(strengthInput.value));
+        applyMotionToVrm(currentVrm, latestMotion, Number(strengthInput.value), currentRigCache);
       }
       currentVrm.update(delta);
     }
@@ -171,10 +252,12 @@ export function createVrmViewer(options: ViewerOptions): VrmViewer {
       if (currentVrm) {
         scene.remove(currentVrm.scene);
         VRMUtils.deepDispose(currentVrm.scene);
+        currentRigCache = null;
       }
 
       VRMUtils.rotateVRM0(vrm);
       currentVrm = vrm;
+      currentRigCache = createRigCache(vrm);
       currentVrm.scene.position.set(0, 0, 0);
       scene.add(currentVrm.scene);
       stateElement.textContent = file.name;
@@ -210,20 +293,202 @@ export function createVrmViewer(options: ViewerOptions): VrmViewer {
   };
 }
 
-function applyMotionToVrm(vrm: VRM, motion: MotionSnapshot, strength: number): void {
+function applyMotionToVrm(
+  vrm: VRM,
+  motion: MotionSnapshot,
+  strength: number,
+  rigCache: VrmRigCache | null,
+): void {
   const pose: VRMPose = {};
 
-  for (const [sourceName, boneName] of Object.entries(bodyBoneMap)) {
+  for (const [sourceName, boneName] of Object.entries(torsoBoneMap)) {
     const bone = motion.bones[sourceName];
     if (!bone) continue;
     pose[boneName] = {
-      rotation: eulerToQuaternionTuple(scaleEuler(bone.rotation, strength)),
+      rotation: eulerToQuaternionTuple(scaleTorsoEuler(sourceName, bone.rotation, strength)),
     };
   }
+
+  if (motion.head) {
+    pose[VRMHumanBoneName.Head] = {
+      rotation: eulerToQuaternionTuple({
+        x: -motion.head.pitch * strength * 0.55,
+        y: motion.head.yaw * strength * 0.55,
+        z: -motion.head.roll * strength * 0.28,
+      }),
+    };
+  }
+
+  if (rigCache) {
+    applyLimbIkPose(pose, motion, strength, rigCache);
+  }
+  applyEulerFallbackPose(pose, motion, strength);
 
   applyFingerPose(pose, motion.hands, strength);
   vrm.humanoid.setNormalizedPose(pose);
   applyExpressions(vrm, motion.blendShapes);
+}
+
+function createRigCache(vrm: VRM): VrmRigCache {
+  vrm.humanoid.resetNormalizedPose();
+  vrm.humanoid.normalizedHumanBonesRoot.updateWorldMatrix(true, true);
+
+  const boneNames = Object.values(VRMHumanBoneName);
+  const nodeToBone = new Map<THREE.Object3D, VRMHumanBoneName>();
+  const parentBones: Partial<Record<VRMHumanBoneName, VRMHumanBoneName>> = {};
+  const restDirections: Partial<Record<VRMHumanBoneName, THREE.Vector3>> = {};
+
+  for (const boneName of boneNames) {
+    const node = vrm.humanoid.getNormalizedBoneNode(boneName);
+    if (node) {
+      nodeToBone.set(node, boneName);
+    }
+  }
+
+  for (const boneName of boneNames) {
+    const node = vrm.humanoid.getNormalizedBoneNode(boneName);
+    if (!node) continue;
+
+    let parent = node.parent;
+    while (parent) {
+      const parentBone = nodeToBone.get(parent);
+      if (parentBone) {
+        parentBones[boneName] = parentBone;
+        break;
+      }
+      parent = parent.parent;
+    }
+  }
+
+  for (const config of ikBoneConfigs) {
+    const boneNode = vrm.humanoid.getNormalizedBoneNode(config.boneName);
+    const childNode = vrm.humanoid.getNormalizedBoneNode(config.childBoneName);
+    if (!boneNode || !childNode) continue;
+
+    const direction = childNode
+      .getWorldPosition(new THREE.Vector3())
+      .sub(boneNode.getWorldPosition(new THREE.Vector3()));
+    if (direction.lengthSq() > 0.000001) {
+      restDirections[config.boneName] = direction.normalize();
+    }
+  }
+
+  return { restDirections, parentBones };
+}
+
+function applyEulerFallbackPose(
+  pose: VRMPose,
+  motion: MotionSnapshot,
+  strength: number,
+): void {
+  for (const [sourceName, boneName] of Object.entries(bodyBoneMap)) {
+    if (torsoBoneMap[sourceName]) continue;
+
+    const bone = motion.bones[sourceName];
+    if (!bone || pose[boneName]) continue;
+    pose[boneName] = {
+      rotation: eulerToQuaternionTuple(scaleEuler(bone.rotation, strength)),
+    };
+  }
+}
+
+function applyLimbIkPose(
+  pose: VRMPose,
+  motion: MotionSnapshot,
+  strength: number,
+  rigCache: VrmRigCache,
+): void {
+  const worldRotations: Partial<Record<VRMHumanBoneName, THREE.Quaternion>> = {};
+  const strengthAmount = clamp(strength, 0, 1);
+  seedWorldRotationsFromPose(pose, rigCache.parentBones, worldRotations);
+
+  for (const config of ikBoneConfigs) {
+    const sourceBone = motion.bones[config.sourceName];
+    const targetDirection = sourceBone?.direction;
+    const restDirection = rigCache.restDirections[config.boneName];
+    if (!targetDirection || !restDirection || !visibleEnough(targetDirection)) continue;
+
+    const parentWorldRotation = getSolvedParentWorldRotation(
+      config.boneName,
+      rigCache.parentBones,
+      worldRotations,
+    );
+    const localTargetDirection = new THREE.Vector3(
+      targetDirection.x,
+      targetDirection.y,
+      targetDirection.z,
+    )
+      .normalize()
+      .applyQuaternion(parentWorldRotation.clone().invert());
+    const localRestDirection = restDirection.clone();
+
+    const delta = new THREE.Quaternion().setFromUnitVectors(
+      localRestDirection.normalize(),
+      localTargetDirection.normalize(),
+    );
+    const limited = limitQuaternionAngle(delta, config.maxAngle);
+    const weighted = new THREE.Quaternion().identity().slerp(
+      limited,
+      clamp(strengthAmount * config.weight, 0, 1),
+    );
+
+    pose[config.boneName] = {
+      rotation: [weighted.x, weighted.y, weighted.z, weighted.w],
+    };
+    worldRotations[config.boneName] = parentWorldRotation.clone().multiply(weighted);
+  }
+}
+
+function seedWorldRotationsFromPose(
+  pose: VRMPose,
+  parentBones: VrmRigCache["parentBones"],
+  worldRotations: Partial<Record<VRMHumanBoneName, THREE.Quaternion>>,
+): void {
+  for (const boneName of [
+    VRMHumanBoneName.Hips,
+    VRMHumanBoneName.Spine,
+    VRMHumanBoneName.Chest,
+    VRMHumanBoneName.UpperChest,
+    VRMHumanBoneName.Neck,
+    VRMHumanBoneName.Head,
+  ]) {
+    const rotation = pose[boneName]?.rotation;
+    if (!rotation) continue;
+
+    const parentWorldRotation = getSolvedParentWorldRotation(
+      boneName,
+      parentBones,
+      worldRotations,
+    );
+    const localRotation = new THREE.Quaternion().fromArray(rotation);
+    worldRotations[boneName] = parentWorldRotation.multiply(localRotation);
+  }
+}
+
+function getSolvedParentWorldRotation(
+  boneName: VRMHumanBoneName,
+  parentBones: VrmRigCache["parentBones"],
+  worldRotations: Partial<Record<VRMHumanBoneName, THREE.Quaternion>>,
+): THREE.Quaternion {
+  let parentBone = parentBones[boneName];
+
+  while (parentBone) {
+    const parentRotation = worldRotations[parentBone];
+    if (parentRotation) {
+      return parentRotation.clone();
+    }
+    parentBone = parentBones[parentBone];
+  }
+
+  return new THREE.Quaternion();
+}
+
+function limitQuaternionAngle(quaternion: THREE.Quaternion, maxAngle: number): THREE.Quaternion {
+  const normalized = quaternion.clone().normalize();
+  const angle = 2 * Math.acos(clamp(Math.abs(normalized.w), 0, 1));
+  if (angle <= maxAngle) return normalized;
+
+  return new THREE.Quaternion().identity().slerp(normalized, maxAngle / angle);
 }
 
 function applyFingerPose(
@@ -268,6 +533,40 @@ function scaleEuler(rotation: Euler, strength: number): Euler {
     y: rotation.y * strength,
     z: rotation.z * strength,
   };
+}
+
+function scaleTorsoEuler(sourceName: string, rotation: Euler, strength: number): Euler {
+  const scaled = scaleEuler(rotation, strength);
+
+  if (sourceName === "hips") {
+    return {
+      x: scaled.x * 0.25,
+      y: scaled.y * 0.35,
+      z: scaled.z * 0.35,
+    };
+  }
+
+  if (sourceName === "spine" || sourceName === "chest") {
+    return {
+      x: scaled.x * 0.34,
+      y: scaled.y * 0.28,
+      z: scaled.z * 0.28,
+    };
+  }
+
+  if (sourceName === "neck") {
+    return {
+      x: scaled.x * 0.32,
+      y: scaled.y * 0.36,
+      z: scaled.z * 0.28,
+    };
+  }
+
+  return scaled;
+}
+
+function visibleEnough(point: { visibility?: number }): boolean {
+  return point.visibility === undefined || point.visibility >= 0.35;
 }
 
 function eulerToQuaternionTuple(rotation: Euler): [number, number, number, number] {

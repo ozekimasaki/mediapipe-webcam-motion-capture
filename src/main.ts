@@ -666,19 +666,100 @@ function makeBonePoses(
   const bones: Record<string, BonePose> = {};
   const source = worldLandmarks.length ? worldLandmarks : poseLandmarks;
   const sourcePoint = (index: number): Point | undefined => toMotionPoint(source[index]);
+  const avatarPoint = (index: number): Point | undefined => toAvatarPoint(source[index]);
   const screenPoint = (index: number): Point | undefined => toScreenPoint(poseLandmarks[index]);
   const facePoint = (index: number): Point | undefined => toScreenPoint(faceLandmarks[index]);
 
-  addLimbBone(bones, "leftUpperArm", sourcePoint(11), sourcePoint(13), screenPoint(11));
-  addLimbBone(bones, "leftLowerArm", sourcePoint(13), sourcePoint(15), screenPoint(13));
-  addLimbBone(bones, "leftHand", sourcePoint(15), sourcePoint(19), screenPoint(15));
-  addLimbBone(bones, "rightUpperArm", sourcePoint(12), sourcePoint(14), screenPoint(12));
-  addLimbBone(bones, "rightLowerArm", sourcePoint(14), sourcePoint(16), screenPoint(14));
-  addLimbBone(bones, "rightHand", sourcePoint(16), sourcePoint(20), screenPoint(16));
-  addLimbBone(bones, "leftUpperLeg", sourcePoint(23), sourcePoint(25), screenPoint(23));
-  addLimbBone(bones, "leftLowerLeg", sourcePoint(25), sourcePoint(27), screenPoint(25));
-  addLimbBone(bones, "rightUpperLeg", sourcePoint(24), sourcePoint(26), screenPoint(24));
-  addLimbBone(bones, "rightLowerLeg", sourcePoint(26), sourcePoint(28), screenPoint(26));
+  addLimbBone(
+    bones,
+    "leftUpperArm",
+    sourcePoint(11),
+    sourcePoint(13),
+    screenPoint(11),
+    avatarPoint(11),
+    avatarPoint(13),
+  );
+  addLimbBone(
+    bones,
+    "leftLowerArm",
+    sourcePoint(13),
+    sourcePoint(15),
+    screenPoint(13),
+    avatarPoint(13),
+    avatarPoint(15),
+  );
+  addLimbBone(
+    bones,
+    "leftHand",
+    sourcePoint(15),
+    sourcePoint(19),
+    screenPoint(15),
+    avatarPoint(15),
+    avatarPoint(19),
+  );
+  addLimbBone(
+    bones,
+    "rightUpperArm",
+    sourcePoint(12),
+    sourcePoint(14),
+    screenPoint(12),
+    avatarPoint(12),
+    avatarPoint(14),
+  );
+  addLimbBone(
+    bones,
+    "rightLowerArm",
+    sourcePoint(14),
+    sourcePoint(16),
+    screenPoint(14),
+    avatarPoint(14),
+    avatarPoint(16),
+  );
+  addLimbBone(
+    bones,
+    "rightHand",
+    sourcePoint(16),
+    sourcePoint(20),
+    screenPoint(16),
+    avatarPoint(16),
+    avatarPoint(20),
+  );
+  addLimbBone(
+    bones,
+    "leftUpperLeg",
+    sourcePoint(23),
+    sourcePoint(25),
+    screenPoint(23),
+    avatarPoint(23),
+    avatarPoint(25),
+  );
+  addLimbBone(
+    bones,
+    "leftLowerLeg",
+    sourcePoint(25),
+    sourcePoint(27),
+    screenPoint(25),
+    avatarPoint(25),
+    avatarPoint(27),
+  );
+  addLimbBone(
+    bones,
+    "rightUpperLeg",
+    sourcePoint(24),
+    sourcePoint(26),
+    screenPoint(24),
+    avatarPoint(24),
+    avatarPoint(26),
+  );
+  addLimbBone(
+    bones,
+    "rightLowerLeg",
+    sourcePoint(26),
+    sourcePoint(28),
+    screenPoint(26),
+    avatarPoint(26),
+    avatarPoint(28),
+  );
 
   const leftHip = screenPoint(23);
   const rightHip = screenPoint(24);
@@ -762,11 +843,14 @@ function addLimbBone(
   from: Point | undefined,
   to: Point | undefined,
   position: Point | undefined,
+  avatarFrom?: Point,
+  avatarTo?: Point,
 ): void {
   if (!from || !to) return;
   bones[name] = {
     position,
     rotation: vectorToEuler(from, to),
+    direction: directionVector(avatarFrom, avatarTo),
   };
 }
 
@@ -1076,6 +1160,16 @@ function toMotionPoint(point: Point | undefined): Point | undefined {
   };
 }
 
+function toAvatarPoint(point: Point | undefined): Point | undefined {
+  if (!point) return undefined;
+  return {
+    x: point.x,
+    y: -point.y,
+    z: -point.z,
+    visibility: point.visibility,
+  };
+}
+
 function averagePoint(a: Point | undefined, b: Point | undefined): Point | undefined {
   if (!a || !b) return undefined;
   return {
@@ -1099,6 +1193,26 @@ function vectorToEuler(a: Point, b: Point): Euler {
     x: round(clamp(Math.atan2(-dy, horizontal) / (Math.PI / 2), -1, 1)),
     y: round(clamp(Math.atan2(dx, Math.hypot(dy, dz)) / (Math.PI / 2), -1, 1)),
     z: round(clamp(Math.atan2(dy, dx) / Math.PI, -1, 1)),
+  };
+}
+
+function directionVector(a: Point | undefined, b: Point | undefined): Point | undefined {
+  if (!a || !b) return undefined;
+
+  const x = b.x - a.x;
+  const y = b.y - a.y;
+  const z = b.z - a.z;
+  const length = Math.hypot(x, y, z);
+  if (length < 0.0001) return undefined;
+
+  return {
+    x: round(x / length),
+    y: round(y / length),
+    z: round(z / length),
+    visibility:
+      a.visibility === undefined || b.visibility === undefined
+        ? undefined
+        : Math.min(a.visibility, b.visibility),
   };
 }
 

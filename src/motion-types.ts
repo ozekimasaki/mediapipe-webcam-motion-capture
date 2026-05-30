@@ -13,6 +13,7 @@ export type Euler = {
 export type BonePose = {
   rotation: Euler;
   position?: Point;
+  direction?: Point;
 };
 
 export type FingerCurl = {
