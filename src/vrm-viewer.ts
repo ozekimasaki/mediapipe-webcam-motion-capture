@@ -308,6 +308,7 @@ function applyMotionToVrm(
       rotation: eulerToQuaternionTuple(scaleTorsoEuler(sourceName, bone.rotation, strength)),
     };
   }
+  applyRootPosition(pose, motion, strength);
 
   if (motion.head) {
     pose[VRMHumanBoneName.Head] = {
@@ -327,6 +328,19 @@ function applyMotionToVrm(
   applyFingerPose(pose, motion.hands, strength);
   vrm.humanoid.setNormalizedPose(pose);
   applyExpressions(vrm, motion.blendShapes);
+}
+
+function applyRootPosition(pose: VRMPose, motion: MotionSnapshot, strength: number): void {
+  const torso = motion.torso;
+  if (!torso) return;
+
+  const hips = pose[VRMHumanBoneName.Hips] ?? {};
+  hips.position = [
+    clamp(torso.centerX - 0.5, -0.45, 0.45) * 0.42 * strength,
+    clamp(0.55 - torso.centerY, -0.35, 0.35) * 0.36 * strength,
+    0,
+  ];
+  pose[VRMHumanBoneName.Hips] = hips;
 }
 
 function createRigCache(vrm: VRM): VrmRigCache {

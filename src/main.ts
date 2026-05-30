@@ -666,7 +666,8 @@ function makeBonePoses(
   const bones: Record<string, BonePose> = {};
   const source = worldLandmarks.length ? worldLandmarks : poseLandmarks;
   const sourcePoint = (index: number): Point | undefined => toMotionPoint(source[index]);
-  const avatarPoint = (index: number): Point | undefined => toAvatarPoint(source[index]);
+  const avatarPoint = (index: number): Point | undefined =>
+    toAvatarPoint(poseLandmarks[index], source[index]);
   const screenPoint = (index: number): Point | undefined => toScreenPoint(poseLandmarks[index]);
   const facePoint = (index: number): Point | undefined => toScreenPoint(faceLandmarks[index]);
 
@@ -1160,13 +1161,26 @@ function toMotionPoint(point: Point | undefined): Point | undefined {
   };
 }
 
-function toAvatarPoint(point: Point | undefined): Point | undefined {
-  if (!point) return undefined;
+function toAvatarPoint(
+  screenPoint: Point | undefined,
+  worldPoint: Point | undefined,
+): Point | undefined {
+  if (screenPoint) {
+    return {
+      x: (mirrored(screenPoint.x) - 0.5) * 2,
+      y: (0.5 - screenPoint.y) * 2,
+      z: -((worldPoint ?? screenPoint).z ?? 0) * 2,
+      visibility: screenPoint.visibility,
+    };
+  }
+
+  if (!worldPoint) return undefined;
+
   return {
-    x: point.x,
-    y: -point.y,
-    z: -point.z,
-    visibility: point.visibility,
+    x: mirrorInput.checked ? -worldPoint.x : worldPoint.x,
+    y: -worldPoint.y,
+    z: -worldPoint.z,
+    visibility: worldPoint.visibility,
   };
 }
 
