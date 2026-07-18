@@ -24,6 +24,56 @@ https://mediapipe-webcam-motion-capture.maigo999.workers.dev
 - Local WebSocket-to-VMC Protocol OSC bridge
 - Bridge status and OSC target feedback in the web UI
 
+## Tech Stack
+
+- [Vite](https://vitejs.dev/) 6 with TypeScript for the browser app
+- [@mediapipe/tasks-vision](https://www.npmjs.com/package/@mediapipe/tasks-vision) for pose, face, and hand tracking
+- [three](https://threejs.org/) and [@pixiv/three-vrm](https://github.com/pixiv/three-vrm) for the local VRM preview
+- [ws](https://github.com/websockets/ws) and Node.js `dgram` for the WebSocket-to-VMC OSC bridge
+- [Wrangler](https://developers.cloudflare.com/workers/wrangler/) for Cloudflare deployment (static assets served as a single-page app)
+
+## Requirements
+
+- Node.js 20 or newer and npm (required by Vite 6 and Wrangler 4)
+- A modern browser with WebGL support and a webcam
+- Camera access requires a secure context, so run the app over `https://` or on `localhost` / `127.0.0.1`
+- Network access at runtime: MediaPipe WASM and `.task` models are loaded from `cdn.jsdelivr.net` and `storage.googleapis.com`
+
+## Getting Started
+
+```bash
+npm install
+npm run dev
+```
+
+The dev server runs at `http://127.0.0.1:5173`. Open it in a browser and click `カメラ開始` to grant camera permission and begin tracking.
+
+To create a production build in `dist/`:
+
+```bash
+npm run build
+```
+
+Preview the production build locally:
+
+```bash
+npm run preview
+```
+
+## Development Commands
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start the Vite dev server on `127.0.0.1:5173`. |
+| `npm run build` | Type-check with `tsc` (`noEmit`) and build the app into `dist/`. |
+| `npm run preview` | Serve the production build locally with Vite. |
+| `npm run bridge` | Run the local WebSocket-to-VMC OSC bridge (also serves `dist/` over HTTP). |
+| `npm run verify` | Build, then run the bridge verification script. |
+| `npm run verify:bridge` | Run only the bridge verification (requires an existing `dist/`). |
+| `npm run deploy` | Build and deploy to Cloudflare with Wrangler. |
+
+There is no separate lint or test command; `npm run build` runs `tsc` as the type-check step, and `npm run verify` exercises the bridge end to end.
+
 ## WebSocket Output
 
 Enter a `ws://` or `wss://` URL in the WebSocket field and click `接続`.
@@ -172,9 +222,50 @@ npm run verify
 
 This starts a temporary local bridge, serves the built app from the bridge HTTP server, sends a sample motion packet over WebSocket, and verifies that VMC-style OSC packets are emitted for root, body bones, synthesized finger bones, blendshapes, and status.
 
+## Bridge Options
+
+The bridge reads options from CLI flags (highest priority) or environment variables:
+
+| Flag | Env | Default | Description |
+| --- | --- | --- | --- |
+| `--ws-port` | `WS_PORT` | `8787` | HTTP/WebSocket port for the local app and motion stream. |
+| `--osc-host` | `OSC_HOST` | `127.0.0.1` | Destination host for VMC OSC packets. |
+| `--osc-port` | `OSC_PORT` | `39539` | Destination UDP port for VMC OSC packets. |
+| `--local-address` | `OSC_LOCAL_ADDRESS` | `0.0.0.0` | Local address to bind the UDP socket. |
+| `--local-port` | `OSC_LOCAL_PORT` | `0` | Local UDP port (`0` picks an ephemeral port). |
+| `--root` / `--no-root` | `SEND_ROOT` | on | Send `/VMC/Ext/Root/Pos`. |
+| `--bones` / `--no-bones` | `SEND_BONES` | on | Send body bone `/VMC/Ext/Bone/Pos`. |
+| `--fingers` / `--no-fingers` | `SEND_FINGERS` | on | Send synthesized finger bones. |
+| `--blend-shapes` / `--no-blend-shapes` | `SEND_BLEND_SHAPES` | on | Send blendshape values. |
+| `--swap-hands` | `SWAP_HANDS` | off | Swap left/right hand mapping. |
+
+## Project Structure
+
+```
+.
+├── index.html                 # App shell and UI controls
+├── src/
+│   ├── main.ts                # Entrypoint: camera, MediaPipe trackers, wire preview, WebSocket output
+│   ├── vrm-viewer.ts          # three / three-vrm preview and motion-to-bone rigging
+│   ├── motion-types.ts        # Shared MotionSnapshot / bone / blendshape types
+│   └── style.css              # UI styles
+├── bridge/
+│   ├── vmc-bridge.mjs         # WebSocket-to-VMC OSC bridge + static file server
+│   └── verify-vmc-bridge.mjs  # End-to-end verification script for the bridge
+├── vite.config.ts             # Vite config (dev server on 127.0.0.1:5173)
+├── tsconfig.json              # TypeScript config (strict, noEmit type-check)
+└── wrangler.jsonc             # Cloudflare deployment config (dist/ as SPA)
+```
+
 ## Deploy
 
 ```bash
 npm install
 npm run deploy
 ```
+
+Deployment uses Wrangler and requires Cloudflare authentication (for example `npx wrangler login`).
+
+## License
+
+No license file is currently included in this repository, so all rights are reserved by default. Add a `LICENSE` file to define reuse terms.
